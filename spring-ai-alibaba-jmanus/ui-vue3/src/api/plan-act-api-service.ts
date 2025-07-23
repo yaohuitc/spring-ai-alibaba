@@ -70,11 +70,11 @@ export class PlanActApiService {
   }
 
   // Save plan to server
-  public static async savePlanTemplate(planId: string, planJson: string): Promise<any> {
+  public static async savePlanTemplate(planId: string, planJson: string, cron: string): Promise<any> {
     const response = await fetch(`${this.PLAN_TEMPLATE_URL}/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planId, planJson })
+      body: JSON.stringify({ planId, planJson, cron})
     })
     if (!response.ok) throw new Error(`Failed to save plan: ${response.status}`)
     return await response.json()

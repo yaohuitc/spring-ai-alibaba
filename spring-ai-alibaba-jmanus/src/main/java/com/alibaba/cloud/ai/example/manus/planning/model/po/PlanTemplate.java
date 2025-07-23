@@ -43,6 +43,9 @@ public class PlanTemplate {
 	@Column(name = "title", length = 255)
 	private String title;
 
+	@Column(name = "cron", length = 60)
+	private String cron;
+
 	@Column(name = "user_request", length = 4000)
 	private String userRequest;
 
@@ -56,12 +59,13 @@ public class PlanTemplate {
 	public PlanTemplate() {
 	}
 
-	public PlanTemplate(String planTemplateId, String title, String userRequest) {
+	public PlanTemplate(String planTemplateId, String title, String userRequest, String cron) {
 		this.planTemplateId = planTemplateId;
 		this.title = title;
 		this.userRequest = userRequest;
 		this.createTime = LocalDateTime.now();
 		this.updateTime = LocalDateTime.now();
+		this.cron = cron;
 	}
 
 	// Getters and setters
@@ -113,4 +117,11 @@ public class PlanTemplate {
 		this.updateTime = updateTime;
 	}
 
+	public String getCron() {
+		return cron;
+	}
+
+	public void setCron(String cron) {
+		this.cron = cron;
+	}
 }

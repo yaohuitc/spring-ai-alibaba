@@ -19,8 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +42,7 @@ import com.alibaba.cloud.ai.example.manus.planning.model.vo.ExecutionContext;
 import com.alibaba.cloud.ai.example.manus.planning.model.vo.PlanInterface;
 import com.alibaba.cloud.ai.example.manus.planning.service.PlanTemplateService;
 import com.alibaba.cloud.ai.example.manus.recorder.PlanExecutionRecorder;
+import com.alibaba.cloud.ai.example.manus.scheduling.ManusSchedulingTaskLoader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -65,6 +66,9 @@ public class PlanTemplateController {
 
 	@Autowired
 	private PlanIdDispatcher planIdDispatcher;
+
+	@Autowired
+	private ManusSchedulingTaskLoader manusSchedulingTaskLoader;
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -140,7 +144,7 @@ public class PlanTemplateController {
 			}
 
 			// Save to version history
-			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson);
+			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson, "");
 
 			// Return plan data
 			Map<String, Object> response = new HashMap<>();
@@ -173,7 +177,7 @@ public class PlanTemplateController {
 		}
 
 		String rawParam = request.get("rawParam");
-		return executePlanByTemplateIdInternal(planTemplateId, rawParam);
+		return this.planTemplateService.executePlanByTemplateIdInternal(planTemplateId, rawParam);
 	}
 
 	/**
@@ -193,97 +197,7 @@ public class PlanTemplateController {
 		logger.info("Execute plan template, ID: {}, parameters: {}", planTemplateId, allParams);
 		String rawParam = allParams != null ? allParams.get("rawParam") : null;
 		// If there are URL parameters, use the method with parameters
-		return executePlanByTemplateIdInternal(planTemplateId, rawParam);
-	}
-
-	/**
-	 * Internal common method for executing plans (version with URL parameters)
-	 * @param planTemplateId Plan template ID
-	 * @param rawParam URL query parameters
-	 * @return Result status
-	 */
-	private ResponseEntity<Map<String, Object>> executePlanByTemplateIdInternal(String planTemplateId,
-			String rawParam) {
-		try {
-			// Step 1: Get execution JSON from repository by planTemplateId
-			PlanTemplate template = planTemplateService.getPlanTemplate(planTemplateId);
-			if (template == null) {
-				return ResponseEntity.notFound().build();
-			}
-
-			// Get the latest version of the plan JSON
-			List<String> versions = planTemplateService.getPlanVersions(planTemplateId);
-			if (versions.isEmpty()) {
-				return ResponseEntity.internalServerError()
-					.body(Map.of("error", "Plan template has no executable version"));
-			}
-			String planJson = planTemplateService.getPlanVersion(planTemplateId, versions.size() - 1);
-			if (planJson == null || planJson.trim().isEmpty()) {
-				return ResponseEntity.internalServerError().body(Map.of("error", "Cannot get plan JSON data"));
-			}
-
-			// Generate a new plan ID, not using the template ID
-			String newPlanId = planIdDispatcher.generatePlanId();
-
-			// Get planning flow, using the new plan ID
-			PlanningCoordinator planningCoordinator = planningFactory.createPlanningCoordinator(newPlanId);
-			ExecutionContext context = new ExecutionContext();
-			context.setCurrentPlanId(newPlanId);
-			context.setRootPlanId(newPlanId);
-			context.setNeedSummary(true); // We need to generate a summary
-
-			try {
-				// 使用 Jackson 反序列化 JSON 为 PlanInterface 对象（支持多态）
-				PlanInterface plan = objectMapper.readValue(planJson, PlanInterface.class);
-
-				// 设置新的计划ID，覆盖JSON中的ID
-				plan.setCurrentPlanId(newPlanId);
-				plan.setRootPlanId(newPlanId);
-				// 设置URL参数到计划中
-				if (rawParam != null && !rawParam.isEmpty()) {
-					logger.info("Set execution parameters to plan: {}", rawParam);
-					plan.setExecutionParams(rawParam);
-				}
-
-				// Set plan to context
-				context.setPlan(plan);
-
-				// Get user request from recorder
-				context.setUserRequest(template.getTitle());
-			}
-			catch (Exception e) {
-				logger.error("Failed to parse plan JSON or get user request", e);
-				context.setUserRequest("Execute plan: " + newPlanId + "\nFrom template: " + planTemplateId);
-
-				// If parsing fails, record the error but continue with the flow
-				logger.warn("Using original JSON to continue execution", e);
-			}
-
-			// Execute the plan asynchronously
-			CompletableFuture.runAsync(() -> {
-				try {
-					// Execute the plan and summary steps, skipping the create plan step
-					planningCoordinator.executeExistingPlan(context);
-					logger.info("Plan execution successful: {}", newPlanId);
-				}
-				catch (Exception e) {
-					logger.error("Plan execution failed", e);
-				}
-			});
-
-			// Return task ID and initial status
-			Map<String, Object> response = new HashMap<>();
-			response.put("planId", newPlanId);
-			response.put("status", "processing");
-			response.put("message", "计划执行请求已提交，正在处理中");
-
-			return ResponseEntity.ok(response);
-		}
-		catch (Exception e) {
-			logger.error("Plan execution failed", e);
-			return ResponseEntity.internalServerError()
-				.body(Map.of("error", "Plan execution failed: " + e.getMessage()));
-		}
+		return this.planTemplateService.executePlanByTemplateIdInternal(planTemplateId, rawParam);
 	}
 
 	/**
@@ -291,7 +205,7 @@ public class PlanTemplateController {
 	 * @param planJson Plan JSON data
 	 * @return Save result
 	 */
-	private PlanTemplateService.VersionSaveResult saveToVersionHistory(String planJson) {
+	private PlanTemplateService.VersionSaveResult saveToVersionHistory(String planJson, String cron) {
 		try {
 			// Parse JSON to extract planTemplateId and title
 			ObjectMapper mapper = new ObjectMapper();
@@ -331,13 +245,21 @@ public class PlanTemplateController {
 			// Check if the plan exists
 			PlanTemplate template = planTemplateService.getPlanTemplate(planTemplateId);
 			if (template == null) {
+				template = new PlanTemplate(planTemplateId, title, "User request to generate plan: " + planTemplateId, cron);
 				// If it doesn't exist, create a new plan
-				planTemplateService.savePlanTemplate(planTemplateId, title,
-						"User request to generate plan: " + planTemplateId, planJson);
+				planTemplateService.savePlanTemplate(template, planJson);
 				logger.info("New plan created: {}", planTemplateId);
+
+				if (StringUtils.isNotBlank(cron)) {
+					manusSchedulingTaskLoader.schedulePlan(template);
+				}
 				return new PlanTemplateService.VersionSaveResult(true, false, "New plan created", 0);
 			}
 			else {
+				if (!StringUtils.equals(template.getCron(),cron)) {
+					template.setCron(cron);
+					manusSchedulingTaskLoader.schedulePlan(template);
+				}
 				// If it exists, save a new version
 				PlanTemplateService.VersionSaveResult result = planTemplateService.saveToVersionHistory(planTemplateId,
 						planJson);
@@ -364,6 +286,7 @@ public class PlanTemplateController {
 	@PostMapping("/save")
 	public ResponseEntity<Map<String, Object>> savePlan(@RequestBody Map<String, String> request) {
 		String planJson = request.get("planJson");
+		String cron = request.get("cron");
 
 		if (planJson == null || planJson.trim().isEmpty()) {
 			return ResponseEntity.badRequest().body(Map.of("error", "Plan data cannot be empty"));
@@ -398,7 +321,7 @@ public class PlanTemplateController {
 			}
 
 			// Save to version history
-			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson);
+			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson, cron);
 
 			// Calculate version count
 			List<String> versions = planTemplateService.getPlanVersions(planId);
@@ -516,6 +439,7 @@ public class PlanTemplateController {
 				templateData.put("description", template.getUserRequest());
 				templateData.put("createTime", template.getCreateTime());
 				templateData.put("updateTime", template.getUpdateTime());
+				templateData.put("cron", template.getCron());
 				templateList.add(templateData);
 			}
 
@@ -604,7 +528,7 @@ public class PlanTemplateController {
 			}
 
 			// Save to version history
-			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson);
+			PlanTemplateService.VersionSaveResult saveResult = saveToVersionHistory(planJson, "");
 
 			// Return plan data
 			Map<String, Object> response = new HashMap<>();

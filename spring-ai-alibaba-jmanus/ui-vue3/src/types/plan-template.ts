@@ -25,6 +25,7 @@ export interface PlanTemplate {
   planJson?: string
   prompt?: string
   params?: string
+  cron?: string
 }
 
 export interface PlanTemplateListResponse {

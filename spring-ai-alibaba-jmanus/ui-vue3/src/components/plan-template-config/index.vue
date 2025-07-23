@@ -304,7 +304,7 @@ const handleSaveTemplate = async () => {
   }
 
   try {
-    const result = await PlanActApiService.savePlanTemplate(currentTemplate.value.id, content)
+    const result = await PlanActApiService.savePlanTemplate(currentTemplate.value.id, content, "")
     
     if (result.duplicate) {
       alert(`保存完成：${result.message}\n\n当前版本数：${result.versionCount}`)
