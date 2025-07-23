@@ -201,6 +201,26 @@
               :placeholder="$t('sidebar.jsonPlaceholder')"
               rows="12"
             ></textarea>
+
+            <div class="execution-content">
+              <div class="params-input-group">
+                <label>{{ $t('sidebar.cron') }}</label>
+                <div class="params-input-container">
+                  <input
+                      v-model="sidebarStore.cron"
+                      class="params-input"
+                      :placeholder="$t('sidebar.cronPlaceholder')"
+                  />
+                  <button
+                      class="clear-params-btn"
+                      @click="sidebarStore.clearCron"
+                      :title="$t('commmon.clear')"
+                  >
+                    <Icon icon="carbon:close" width="12" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Section 3: Execution Controller -->
@@ -274,15 +294,15 @@ const formattedJsonContent = computed({
   get() {
     try {
       if (!sidebarStore.jsonContent) return ''
-      
+
       const parsed = JSON.parse(sidebarStore.jsonContent)
-      
+
       // Remove hidden fields for display
       const filtered = { ...parsed }
       hiddenFields.forEach(field => {
         delete filtered[field]
       })
-      
+
       // Return formatted JSON
       return JSON.stringify(filtered, null, 2)
     } catch {
@@ -296,9 +316,9 @@ const formattedJsonContent = computed({
         sidebarStore.jsonContent = ''
         return
       }
-      
+
       const parsed = JSON.parse(value)
-      
+
       // Get original data to preserve hidden fields
       let originalData: any = {}
       try {
@@ -306,7 +326,7 @@ const formattedJsonContent = computed({
       } catch {
         // If original is not valid JSON, start fresh
       }
-      
+
       // Merge user input with preserved hidden fields
       const merged: any = { ...parsed }
       hiddenFields.forEach(field => {
@@ -314,7 +334,7 @@ const formattedJsonContent = computed({
           merged[field] = originalData[field]
         }
       })
-      
+
       sidebarStore.jsonContent = JSON.stringify(merged)
     } catch {
       // If parsing fails, store as-is

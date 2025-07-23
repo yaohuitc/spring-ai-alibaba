@@ -521,6 +521,8 @@ const words: I18nType = {
     jsonTemplate: 'JSON Template',
     rollback: 'Rollback',
     restore: 'Restore',
+    cron: 'Cron Expression',
+    cronPlaceholder: 'Cron Expression (Optional)',
     jsonPlaceholder:
       'Step 2: Here you can directly modify the execution plan generated in Step 1 to make it more accurately follow your intentions. Then you can click Execute Plan to run this plan with high certainty.',
     planGenerator: 'Plan Generator',

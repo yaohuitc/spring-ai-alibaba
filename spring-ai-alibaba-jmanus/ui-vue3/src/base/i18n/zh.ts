@@ -491,6 +491,8 @@ const words: I18nType = {
     jsonTemplate: 'JSON 模板',
     rollback: '回滚',
     restore: '恢复',
+    cron: 'Cron表达式',
+    cronPlaceholder: 'Cron表达式(可选项)',
     jsonPlaceholder:
       'step2 ： 你可以在这里直接修改在step1中生产出的执行计划，让他更精准的按照你的希望执行。然后你可以点击执行计划，高确定性的执行这个计划',
     planGenerator: '计划生成器',

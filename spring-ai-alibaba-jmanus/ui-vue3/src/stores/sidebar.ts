@@ -36,6 +36,7 @@ export class SidebarStore {
 
   // Configuration related state
   jsonContent = ''
+  cron = ''
   generatorPrompt = ''
   executionParams = ''
   isGenerating = false
@@ -115,6 +116,7 @@ export class SidebarStore {
     try {
       const versionsResponse = await PlanActApiService.getPlanVersions(template.id)
       this.planVersions = versionsResponse.versions || []
+      this.cron = template.cron || ''
       if (this.planVersions.length > 0) {
         const latestContent = this.planVersions[this.planVersions.length - 1]
         this.jsonContent = latestContent
@@ -194,6 +196,10 @@ export class SidebarStore {
     this.executionParams = ''
   }
 
+  clearCron = () => {
+    sidebarStore.cron = ''
+  }
+
   rollbackVersion() {
     if (this.canRollback) {
       this.currentVersionIndex--
@@ -222,7 +228,8 @@ export class SidebarStore {
     try {
       const saveResult = await PlanActApiService.savePlanTemplate(
         this.selectedTemplate.id,
-        content
+        content,
+        this.cron
       )
       if (this.currentVersionIndex < this.planVersions.length - 1) {
         this.planVersions = this.planVersions.slice(0, this.currentVersionIndex + 1)
